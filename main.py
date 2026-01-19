@@ -20,11 +20,27 @@ async def safe_edit(query, text, reply_markup=None):
 
 
 # إعدادات البوت
+# إعدادات البوت
+# إعدادات البوت
 TOKEN = "8450413524:AAE3Hxcb0tijnwb75kLJzkyhqIzPPBT8XYk"
 ADMIN_ID = 8117492678
 BOT_CHANNEL = "@TUX3T"
 DATA_FILE = "data.json"
 USERS_FILE = "users.json"
+
+# نظام التحديثات الدقيقة للباك أب
+BACKUP_INTERVAL = 1800  # كل 60 ثانية (دقيقة واحدة)
+_last_backup_time = 0
+
+# ========== المسارات المحلية على الهاتف ==========
+BOT_DIR = "/storage/emulated/0/بو"
+DATA_FILE = os.path.join(BOT_DIR, "data.json")
+USERS_FILE = os.path.join(BOT_DIR, "users.json")
+BACKUP_DIR = os.path.join(BOT_DIR, "backups")
+
+# تأكد من وجود المجلدات
+os.makedirs(BOT_DIR, exist_ok=True)
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # إعدادات متقدمة
 CACHE_TTL = 30
@@ -1317,8 +1333,8 @@ async def handle_code_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ الكود غير صحيح!")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data = context.user_data
     """معالجة ضغطات الأزرار"""
+    user_data = context.user_data
     query = update.callback_query
     user_id = str(query.from_user.id)
     
@@ -1335,7 +1351,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # التحقق من الاشتراك الإجباري للأوامر الأساسية
-    if query.data not in ["check_force_sub", "back_main", "admin_panel"]:
+    if query.data not in ["check_force_sub", "back_main", "admin_panel", "admin_storage_info", "refresh_storage_info"]:
         can_use = await check_and_enforce_subscription(
             context.bot, 
             int(user_id), 
@@ -1412,6 +1428,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif query.data.startswith("report_channel_"):
             await handle_report_channel(query, user_id, context.bot)
+            
+        elif query.data == "admin_storage_info":
+            if is_admin(query.from_user.id):
+                await storage_info(query, context)
+            else:
+                await query.answer("❌ ليس لديك صلاحية الوصول!", show_alert=True)
+                
+        elif query.data == "refresh_storage_info":
+            if is_admin(query.from_user.id):
+                await storage_info(query, context)
+            else:
+                await query.answer("❌ ليس لديك صلاحية الوصول!", show_alert=True)
             
         elif query.data.startswith("admin_"):
             if not is_admin(query.from_user.id):
@@ -1542,6 +1570,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML"
                 )
                 context.user_data["admin_action"] = "remove_code"
+            elif action == "storage_info":
+                await storage_info(query, context)
             
         else:
             await query.answer("❌ هذا الزر لا يعمل حالياً!", show_alert=True)
@@ -2570,7 +2600,7 @@ async def back_to_main(query, user_id):
 # ===================== لوحة الإدمن =====================
 
 async def show_admin_panel(query):
-    """عرض لوحة الإدمن"""
+    """عرض لوحة الإدمن مع زر التخزين"""
     if not is_admin(query.from_user.id):
         await query.answer("❌ ليس لديك صلاحية الوصول!", show_alert=True)
         return
@@ -2590,7 +2620,8 @@ async def show_admin_panel(query):
          InlineKeyboardButton("💸 خصم نقاط", callback_data="admin_take_points")],
         [InlineKeyboardButton("👤 معلومات مستخدم", callback_data="admin_user_info"),
          InlineKeyboardButton("📊 إحصائيات", callback_data="admin_stats")],
-        [InlineKeyboardButton("📢 بث رسالة", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📢 بث رسالة", callback_data="admin_broadcast"),
+         InlineKeyboardButton("💾 حالة التخزين", callback_data="admin_storage_info")],  # أضف هذا السطر
         [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -4474,6 +4505,76 @@ async def test_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
+async def storage_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض معلومات التخزين"""
+    user_id = str(update.message.from_user.id)
+    
+    if not is_admin(int(user_id)):
+        await update.message.reply_text("❌ هذا الأمر للمشرفين فقط!")
+        return
+    
+    try:
+        # معلومات الملفات
+        users_size = os.path.getsize(USERS_FILE) if os.path.exists(USERS_FILE) else 0
+        data_size = os.path.getsize(DATA_FILE) if os.path.exists(DATA_FILE) else 0
+        
+        # عدد النسخ الاحتياطية
+        backup_count = 0
+        backup_total_size = 0
+        if os.path.exists(BACKUP_DIR):
+            for file in os.listdir(BACKUP_DIR):
+                if file.endswith('.bak'):
+                    file_path = os.path.join(BACKUP_DIR, file)
+                    backup_total_size += os.path.getsize(file_path)
+                    backup_count += 1
+        
+        # تحويل الحجم
+        def format_size(bytes_size):
+            for unit in ['B', 'KB', 'MB']:
+                if bytes_size < 1024:
+                    return f"{bytes_size:.2f} {unit}"
+                bytes_size /= 1024
+            return f"{bytes_size:.2f} GB"
+        
+        # تحميل البيانات للإحصائيات
+        users_data = load_users()
+        data_info = load_data()
+        
+        message = (
+            f"📊 **معلومات التخزين المحلي**\n\n"
+            f"📁 **المسارات:**\n"
+            f"• المجلد الرئيسي: `{BOT_DIR}`\n"
+            f"• مجلد النسخ: `{BACKUP_DIR}`\n\n"
+            
+            f"📄 **الملفات الرئيسية:**\n"
+            f"• `users.json`: {format_size(users_size)} ({len(users_data)} مستخدم)\n"
+            f"• `data.json`: {format_size(data_size)}\n"
+            f"• القنوات: {len(data_info.get('channels', {}))}\n\n"
+            
+            f"💾 **النسخ الاحتياطية:**\n"
+            f"• العدد: {backup_count} نسخة\n"
+            f"• الحجم الإجمالي: {format_size(backup_total_size)}\n\n"
+            
+            f"📅 **آخر تحديث:**\n"
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        # زر لعرض محتويات المجلد
+        keyboard = [
+            [InlineKeyboardButton("🔄 تحديث المعلومات", callback_data="refresh_storage_info")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في storage_info: {e}")
+        await update.message.reply_text(f"❌ خطأ: {str(e)[:100]}")
+
 def fix_left_completed_flags():
     """إصلاح علامات left_completed القديمة مع الجولات الجديدة"""
     try:
@@ -4742,30 +4843,308 @@ def update_user_channel_join_info(user_id, channel_id, channel_username, current
         return False, None
 
 def create_backup():
-    """إنشاء نسخة احتياطية محسنة"""
+    """إنشاء نسخة احتياطية محسنة في المسار المحلي"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     backup_files = []
     for filename in [USERS_FILE, DATA_FILE]:
         if os.path.exists(filename):
-            backup_name = f"backups/{os.path.basename(filename)}.{timestamp}.bak"
+            backup_name = os.path.join(BACKUP_DIR, f"{os.path.basename(filename)}.{timestamp}.bak")
             try:
                 shutil.copy2(filename, backup_name)
                 backup_files.append(backup_name)
+                logger.info(f"📦 نسخة احتياطية: {backup_name}")
             except Exception as e:
-                logger.error(f"خطأ في نسخ {filename}: {e}")
+                logger.error(f"❌ خطأ في نسخ {filename}: {e}")
     
-    # حذف النسخ القديمة (احتفظ بـ 5 نسخ فقط)
+    # حذف النسخ القديمة (احتفظ بـ 10 نسخ فقط)
     try:
-        if os.path.exists("backups"):
-            backup_files_list = sorted([f for f in os.listdir("backups") if f.endswith(".bak")])
-            for old_backup in backup_files_list[:-5]:
-                os.remove(f"backups/{old_backup}")
+        if os.path.exists(BACKUP_DIR):
+            backup_files_list = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith(".bak")])
+            # حذف كل الملفات القديمة باستثناء آخر 10
+            for old_backup in backup_files_list[:-10]:
+                old_path = os.path.join(BACKUP_DIR, old_backup)
+                try:
+                    os.remove(old_path)
+                    logger.debug(f"🧹 حذف نسخة قديمة: {old_backup}")
+                except Exception as e:
+                    logger.error(f"❌ خطأ في حذف {old_backup}: {e}")
     except Exception as e:
-        logger.error(f"خطأ في حذف النسخ القديمة: {e}")
+        logger.error(f"❌ خطأ في حذف النسخ القديمة: {e}")
     
     return backup_files
+    
+# ===================== نظام النسخ الاحتياطي =====================
 
+BACKUP_INTERVAL = 1800  # كل 60 ثانية (دقيقة واحدة)
+LAST_BACKUP_TIME = 0
+
+def auto_backup_manager():
+    """مدير النسخ الاحتياطي التلقائي"""
+    global LAST_BACKUP_TIME
+    
+    logger.info("🔄 بدء مدير النسخ الاحتياطي التلقائي")
+    
+    while True:
+        try:
+            current_time = time.time()
+            
+            if current_time - LAST_BACKUP_TIME >= BACKUP_INTERVAL:
+                LAST_BACKUP_TIME = current_time
+                create_local_backup()
+                
+                logger.debug(f"✅ نسخة احتياطية محلية: {datetime.now().strftime('%H:%M:%S')}")
+            
+            time.sleep(10)  # فحص كل 10 ثواني
+            
+        except Exception as e:
+            logger.error(f"❌ خطأ في مدير النسخ الاحتياطي: {e}")
+            time.sleep(30)
+
+def create_local_backup():
+    """إنشاء نسخة احتياطية محلية"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        for filename in [USERS_FILE, DATA_FILE]:
+            if os.path.exists(filename):
+                backup_name = os.path.join(BACKUP_DIR, f"{os.path.basename(filename)}.{timestamp}.bak")
+                try:
+                    shutil.copy2(filename, backup_name)
+                except Exception as e:
+                    logger.error(f"❌ فشل نسخ {filename}: {e}")
+        
+        # حذف النسخ القديمة (احتفظ بـ 5 نسخ فقط)
+        cleanup_old_backups()
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في إنشاء النسخة المحلية: {e}")
+
+def cleanup_old_backups():
+    """تنظيف النسخ الاحتياطية القديمة"""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            return
+        
+        # جمع جميع ملفات الباك أب
+        backup_files = []
+        for file in os.listdir(BACKUP_DIR):
+            if file.endswith('.bak'):
+                file_path = os.path.join(BACKUP_DIR, file)
+                backup_files.append((file_path, os.path.getctime(file_path)))
+        
+        # ترتيب من الأقدم للأحدث
+        backup_files.sort(key=lambda x: x[1])
+        
+        # حذف الزائدة عن 5 نسخ
+        if len(backup_files) > 5:
+            files_to_delete = backup_files[:-5]  # احتفظ بآخر 5 نسخ
+            for file_path, _ in files_to_delete:
+                try:
+                    os.remove(file_path)
+                    logger.debug(f"🗑️ تم حذف نسخة قديمة: {os.path.basename(file_path)}")
+                except Exception as e:
+                    logger.error(f"❌ فشل حذف {file_path}: {e}")
+                    
+    except Exception as e:
+        logger.error(f"❌ خطأ في تنظيف النسخ القديمة: {e}")
+
+async def send_backup_to_owner(context: ContextTypes.DEFAULT_TYPE):
+    """إرسال النسخة الاحتياطية للمالك (تلقائي كل دقيقة)"""
+    try:
+        bot = context.bot
+        
+        # التحقق من وجود الملفات
+        if not os.path.exists(USERS_FILE) or not os.path.exists(DATA_FILE):
+            return
+        
+        # إرسال users.json
+        try:
+            with open(USERS_FILE, 'rb') as f:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=f,
+                    filename=f"users_{datetime.now().strftime('%H%M%S')}.json",
+                    caption=f"📁 users.json | {datetime.now().strftime('%H:%M:%S')}"
+                )
+        except Exception as e:
+            logger.error(f"❌ خطأ في إرسال users.json: {e}")
+        
+        # إرسال data.json
+        try:
+            with open(DATA_FILE, 'rb') as f:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=f,
+                    filename=f"data_{datetime.now().strftime('%H%M%S')}.json",
+                    caption=f"📁 data.json | {datetime.now().strftime('%H:%M:%S')}"
+                )
+        except Exception as e:
+            logger.error(f"❌ خطأ في إرسال data.json: {e}")
+        
+        logger.debug(f"📤 تم إرسال نسخة للمالك: {datetime.now().strftime('%H:%M:%S')}")
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ عام في إرسال الباك أب: {e}")
+
+async def get_backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """طلب نسخة احتياطية يدوياً"""
+    user_id = str(update.message.from_user.id)
+    
+    if user_id != str(ADMIN_ID):
+        await update.message.reply_text("❌ هذا الأمر للمالك فقط!")
+        return
+    
+    await update.message.reply_text("📤 جاري إرسال النسخة الاحتياطية...")
+    
+    # إنشاء نسخة محلية أولاً
+    create_local_backup()
+    
+    # إرسال الملفات
+    bot = context.bot
+    try:
+        # إرسال users.json
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'rb') as f:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=f,
+                    filename="users_latest.json",
+                    caption="📁 users.json (يدوياً)"
+                )
+        
+        # إرسال data.json
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, 'rb') as f:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=f,
+                    filename="data_latest.json",
+                    caption="📁 data.json (يدوياً)"
+                )
+        
+        await update.message.reply_text("✅ تم إرسال النسخة الاحتياطية!")
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في الأمر getbackup: {e}")
+        await update.message.reply_text("❌ حدث خطأ في إرسال النسخة!")
+
+async def send_backup_files_to_owner(bot):
+    """إرسال ملفات JSON للمالك كل دقيقة"""
+    global _last_backup_time
+    
+    current_time = time.time()
+    
+    # التحقق من الوقت
+    if current_time - _last_backup_time < BACKUP_INTERVAL:
+        return
+    
+    _last_backup_time = current_time
+    
+    try:
+        # التحقق من وجود الملفات
+        if not os.path.exists(USERS_FILE) or not os.path.exists(DATA_FILE):
+            logger.warning("❌ ملفات البيانات غير موجودة للإرسال")
+            return
+        
+        # إرسال ملف المستخدمين
+        try:
+            with open(USERS_FILE, 'rb') as users_file:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=users_file,
+                    filename="users.json",
+                    caption=f"📁 users.json\n⏰ {datetime.now().strftime('%H:%M:%S')}"
+                )
+        except Exception as e:
+            logger.error(f"❌ خطأ في إرسال users.json: {e}")
+        
+        # إرسال ملف البيانات
+        try:
+            with open(DATA_FILE, 'rb') as data_file:
+                await bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=data_file,
+                    filename="data.json",
+                    caption=f"📁 data.json\n⏰ {datetime.now().strftime('%H:%M:%S')}"
+                )
+        except Exception as e:
+            logger.error(f"❌ خطأ في إرسال data.json: {e}")
+        
+        logger.info(f"✅ تم إرسال نسخة احتياطية للمالك: {datetime.now().strftime('%H:%M:%S')}")
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ عام في إرسال الباك أب: {e}")
+
+async def storage_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض معلومات التخزين"""
+    user_id = str(update.message.from_user.id)
+    
+    if not is_admin(int(user_id)):
+        await update.message.reply_text("❌ هذا الأمر للمشرفين فقط!")
+        return
+    
+    try:
+        # معلومات الملفات
+        users_size = os.path.getsize(USERS_FILE) if os.path.exists(USERS_FILE) else 0
+        data_size = os.path.getsize(DATA_FILE) if os.path.exists(DATA_FILE) else 0
+        
+        # عدد النسخ الاحتياطية
+        backup_count = 0
+        backup_total_size = 0
+        if os.path.exists(BACKUP_DIR):
+            for file in os.listdir(BACKUP_DIR):
+                if file.endswith('.bak'):
+                    file_path = os.path.join(BACKUP_DIR, file)
+                    backup_total_size += os.path.getsize(file_path)
+                    backup_count += 1
+        
+        # تحويل الحجم
+        def format_size(bytes_size):
+            for unit in ['B', 'KB', 'MB']:
+                if bytes_size < 1024:
+                    return f"{bytes_size:.2f} {unit}"
+                bytes_size /= 1024
+            return f"{bytes_size:.2f} GB"
+        
+        # تحميل البيانات للإحصائيات
+        users_data = load_users()
+        data_info = load_data()
+        
+        message = (
+            f"📊 **معلومات التخزين المحلي**\n\n"
+            f"📁 **المسارات:**\n"
+            f"• المجلد الرئيسي: `{BOT_DIR}`\n"
+            f"• مجلد النسخ: `{BACKUP_DIR}`\n\n"
+            
+            f"📄 **الملفات الرئيسية:**\n"
+            f"• `users.json`: {format_size(users_size)} ({len(users_data)} مستخدم)\n"
+            f"• `data.json`: {format_size(data_size)}\n"
+            f"• القنوات: {len(data_info.get('channels', {}))}\n\n"
+            
+            f"💾 **النسخ الاحتياطية:**\n"
+            f"• العدد: {backup_count} نسخة\n"
+            f"• الحجم الإجمالي: {format_size(backup_total_size)}\n\n"
+            
+            f"📅 **آخر تحديث:**\n"
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        # زر لعرض محتويات المجلد
+        keyboard = [
+            [InlineKeyboardButton("🔄 تحديث المعلومات", callback_data="refresh_storage_info")],
+            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في storage_info: {e}")
+        await update.message.reply_text(f"❌ خطأ: {str(e)[:100]}")
 # ===================== الدالة الرئيسية =====================
 
 def main():
@@ -4773,31 +5152,80 @@ def main():
     logger.info("🚀 بدء تشغيل البوت...")
     
     try:
-        # إنشاء مجلدات ضرورية
-        for folder in ["backups"]:
+        # ========== التحقق من المسارات المحلية ==========
+        logger.info(f"📁 التحقق من المسار: {BOT_DIR}")
+        
+        # إنشاء المجلدات الضرورية على الهاتف
+        required_folders = [BOT_DIR, BACKUP_DIR]
+        for folder in required_folders:
             if not os.path.exists(folder):
-                os.makedirs(folder)
-                logger.info(f"📁 تم إنشاء مجلد: {folder}")
+                try:
+                    os.makedirs(folder, exist_ok=True)
+                    logger.info(f"✅ تم إنشاء مجلد: {folder}")
+                except Exception as e:
+                    logger.error(f"❌ فشل إنشاء مجلد {folder}: {e}")
+                    print(f"\n❌ خطأ: لا يمكن إنشاء مجلد {folder}")
+                    print("💡 تأكد من:")
+                    print(f"1. صلاحيات الكتابة في: /storage/emulated/0/")
+                    print("2. مساحة تخزين كافية")
+                    print("3. أن الهاتف غير مقفل")
+                    return
+        
+        # 🔧 التحقق من صلاحيات الكتابة
+        try:
+            # اختبار الكتابة
+            test_file = os.path.join(BOT_DIR, "test_write.txt")
+            with open(test_file, 'w') as f:
+                f.write("test")
+            os.remove(test_file)
+            logger.info("✅ صلاحيات الكتابة صالحة")
+        except Exception as e:
+            logger.error(f"❌ لا توجد صلاحيات كتابة في {BOT_DIR}: {e}")
+            print(f"\n❌ خطأ: لا يمكن الكتابة في {BOT_DIR}")
+            print("💡 الحلول:")
+            print("1. استخدم تطبيق Termux")
+            print("2. استخدم مسار /data/data/com.termux/files/home/")
+            print("3. تأكد من إذن التخزين")
+            return
         
         # 🔧 التحقق من وجود ملفات البيانات وإنشاؤها إذا لزم
+        logger.info("🔍 فحص ملفات البيانات...")
+        
         if not os.path.exists(DATA_FILE):
-            save_data(create_initial_data())
-            logger.info(f"📁 تم إنشاء ملف البيانات: {DATA_FILE}")
+            logger.info(f"📝 إنشاء ملف بيانات جديد: {DATA_FILE}")
+            try:
+                save_data(create_initial_data())
+                logger.info(f"✅ تم إنشاء ملف البيانات: {DATA_FILE}")
+            except Exception as e:
+                logger.error(f"❌ فشل إنشاء {DATA_FILE}: {e}")
+                return
         
         if not os.path.exists(USERS_FILE):
-            save_users({})
-            logger.info(f"📁 تم إنشاء ملف المستخدمين: {USERS_FILE}")
+            logger.info(f"📝 إنشاء ملف مستخدمين جديد: {USERS_FILE}")
+            try:
+                save_users({})
+                logger.info(f"✅ تم إنشاء ملف المستخدمين: {USERS_FILE}")
+            except Exception as e:
+                logger.error(f"❌ فشل إنشاء {USERS_FILE}: {e}")
+                return
         
         # 🔧 تحميل البيانات للتحقق
         try:
             data = load_data()
             users_data = load_users()
             logger.info(f"📊 تم تحميل {len(users_data)} مستخدم و {len(data.get('channels', {}))} قناة")
+            
+            # عرض معلومات الملفات
+            users_size = os.path.getsize(USERS_FILE) if os.path.exists(USERS_FILE) else 0
+            data_size = os.path.getsize(DATA_FILE) if os.path.exists(DATA_FILE) else 0
+            logger.info(f"💾 حجم الملفات: users.json={users_size:,} bytes, data.json={data_size:,} bytes")
+            
         except Exception as e:
             logger.error(f"⚠️ خطأ في تحميل البيانات، سيتم استخدام البيانات الافتراضية: {e}")
             # استخدام البيانات الافتراضية
             data = create_initial_data()
             users_data = {}
+            logger.warning("⚠️ استخدام البيانات الافتراضية")
         
         # 🔧 تنظيف البيانات الأولي (محدود وآمن)
         try:
@@ -4808,13 +5236,24 @@ def main():
         except Exception as e:
             logger.error(f"⚠️ خطأ في تنظيف القنوات المكتملة: {e}")
         
-        # إنشاء التطبيق
+        # ========== بدء النسخ الاحتياطي التلقائي ==========
+        try:
+            backup_thread = threading.Thread(target=auto_backup_manager, daemon=True)
+            backup_thread.start()
+            logger.info("🔄 تم تشغيل مدير النسخ الاحتياطي التلقائي")
+        except Exception as e:
+            logger.error(f"⚠️ فشل تشغيل النسخ الاحتياطي التلقائي: {e}")
+        
+        # ========== إنشاء التطبيق ==========
+        logger.info("🤖 إنشاء تطبيق البوت...")
         application = Application.builder().token(TOKEN).build()
         
-        # إضافة الـ handlers الأساسية
+        # ========== إضافة الـ handlers الأساسية ==========
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("code", handle_code_command))
         application.add_handler(CommandHandler("test_penalty", test_penalty))
+        application.add_handler(CommandHandler("storage", storage_info))
+        application.add_handler(CommandHandler("getbackup", get_backup_command))  # ⭐ أمر جديد
         
         # أزرار الكيبورد
         application.add_handler(CallbackQueryHandler(button_handler, pattern=".*"))
@@ -4857,7 +5296,8 @@ def main():
         # معالج الأخطاء
         application.add_error_handler(error_handler)
         
-        # ===================== المهام المجدولة =====================
+        # ========== المهام المجدولة ==========
+        logger.info("⏰ جدولة المهام...")
         
         # المهام الأساسية المضمونة العمل
         scheduled_tasks = [
@@ -4865,6 +5305,7 @@ def main():
             ("تنظيف الكتم المنتهي", cleanup_expired_mutes, 3600, 60),
             ("فحص اكتمال القنوات", auto_completion_check, 120, 60),
             ("تنظيف المعاملات القديمة", cleanup_old_transactions, 3600, 120),
+            ("إرسال النسخ الاحتياطية", send_backup_to_owner, 1800, 10),  # ⭐ مهمة جديدة
         ]
         
         successful_tasks = 0
@@ -4877,9 +5318,9 @@ def main():
                     name=task_name
                 )
                 successful_tasks += 1
-                logger.info(f"⏰ تم جدولة {task_name} (كل {interval} ثانية)")
+                logger.info(f"✅ تم جدولة {task_name} (كل {interval} ثانية)")
             except Exception as e:
-                logger.error(f"⚠️ فشل جدولة {task_name}: {e}")
+                logger.error(f"❌ فشل جدولة {task_name}: {e}")
         
         # المهام الاختيارية (إذا نجحت المهام الأساسية)
         if successful_tasks >= 2:  # إذا نجحت على الأقل مهمتين أساسيتين
@@ -4896,21 +5337,27 @@ def main():
                         first=first_delay,
                         name=task_name
                     )
-                    logger.info(f"⏰ تم جدولة {task_name} (كل {interval} ثانية)")
+                    logger.info(f"➕ تم جدولة {task_name} (كل {interval} ثانية)")
                 except Exception as e:
                     logger.warning(f"⚠️ فشل جدولة المهمة الاختيارية {task_name}: {e}")
         
-        # معلومات بدء التشغيل
-        logger.info("=" * 50)
-        logger.info("✅ البوت يعمل الآن!")
-        logger.info(f"👑 مالك البوت: {ADMIN_ID}")
+        # ========== معلومات بدء التشغيل النهائية ==========
+        logger.info("=" * 60)
+        logger.info("🎉 البوت يعمل الآن بنجاح!")
+        logger.info(f"👤 مالك البوت: {ADMIN_ID}")
         logger.info(f"📢 قناة البوت: {BOT_CHANNEL}")
-        logger.info(f"📁 ملفات البيانات: {DATA_FILE}, {USERS_FILE}")
+        logger.info(f"📁 المسار الرئيسي: {BOT_DIR}")
+        logger.info(f"💾 ملفات البيانات:")
+        logger.info(f"   • users.json: {USERS_FILE}")
+        logger.info(f"   • data.json: {DATA_FILE}")
+        logger.info(f"   • backups: {BACKUP_DIR}")
         logger.info(f"⏰ المهام المجدولة: {successful_tasks}/{len(scheduled_tasks)}")
+        logger.info(f"📤 النسخ الاحتياطي: كل {BACKUP_INTERVAL} ثانية")
         logger.info(f"🕒 وقت البدء: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("=" * 50)
+        logger.info("=" * 60)
         
-        # تشغيل البوت
+        # ========== تشغيل البوت ==========
+        logger.info("🟢 بدء polling...")
         try:
             application.run_polling(
                 drop_pending_updates=True,
@@ -4923,6 +5370,8 @@ def main():
             logger.info("⏹️ إيقاف البوت بواسطة المستخدم...")
             print("\n" + "=" * 50)
             print("🛑 تم إيقاف البوت بنجاح!")
+            print(f"📁 البيانات محفوظة في: {BOT_DIR}")
+            print(f"📁 النسخ الاحتياطية: {BACKUP_DIR}")
             print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 50)
         except Exception as polling_error:
@@ -4940,7 +5389,7 @@ def main():
             backup_files = []
             for filename in [USERS_FILE, DATA_FILE]:
                 if os.path.exists(filename):
-                    backup_name = f"backups/{os.path.basename(filename)}.crash.{timestamp}.bak"
+                    backup_name = os.path.join(BACKUP_DIR, f"{os.path.basename(filename)}.crash.{timestamp}.bak")
                     try:
                         shutil.copy2(filename, backup_name)
                         backup_files.append(backup_name)
@@ -4950,21 +5399,24 @@ def main():
             
             if backup_files:
                 print(f"\n💾 تم حفظ نسخة احتياطية طارئة في: {backup_files}")
+                print(f"📁 المسار: {BACKUP_DIR}")
         except Exception as backup_error:
             logger.error(f"❌ خطأ في النسخ الاحتياطي الطارئ: {backup_error}")
         
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
         print("❌ حدث خطأ غير متوقع في تشغيل البوت!")
         print(f"📋 الخطأ: {str(e)[:100]}...")
+        print(f"📁 مسار البيانات: {BOT_DIR}")
         print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 50)
+        print("=" * 60)
         
         # إعطاء خيار للمستخدم
         print("\n💡 نصائح استكشاف الأخطاء:")
         print("1. تحقق من توكن البوت")
-        print("2. تحقق من صلاحيات ملفات البيانات")
-        print("3. جرب حذف ملفات البيانات والبدء من جديد")
-        print("4. تحقق من اتصال الإنترنت")
+        print(f"2. تحقق من صلاحيات المجلد: {BOT_DIR}")
+        print("3. جرب تشغيل البوت من تطبيق Termux")
+        print("4. تأكد من اتصال الإنترنت")
+        print("5. تحقق من مساحة التخزين")
         
         # سؤال المستخدم عما إذا كان يريد إعادة المحاولة
         try:
