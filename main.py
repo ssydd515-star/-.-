@@ -5305,7 +5305,7 @@ def main():
             ("تنظيف الكتم المنتهي", cleanup_expired_mutes, 3600, 60),
             ("فحص اكتمال القنوات", auto_completion_check, 120, 60),
             ("تنظيف المعاملات القديمة", cleanup_old_transactions, 3600, 120),
-            ("إرسال النسخ الاحتياطية", send_backup_to_owner, 1800, 10),  # ⭐ مهمة جديدة
+            ("إرسال النسخ الاحتياطية", send_backup_to_owner, 1800, 60),  # ⭐ مهمة جديدة
         ]
         
         successful_tasks = 0
