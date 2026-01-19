@@ -1,6 +1,6 @@
 {
     "8117492678": {
-        "points": 999,
+        "points": 3002,
         "invites": 0,
         "invited_users": [],
         "bought_channels": {},
@@ -9,28 +9,68 @@
         "first_name": "E=☭²⚛️",
         "last_name": ".",
         "first_join": "2026-01-18 20:03:33",
-        "total_earned": 0,
+        "total_earned": 2003,
         "total_spent": 0,
         "orders": [],
         "reports_made": 0,
         "reports_received": 0,
-        "last_active": "2026-01-18 20:03:38",
+        "last_active": "2026-01-19 15:52:57",
         "active_subscriptions": [],
         "daily_gift": {
-            "last_claimed": null,
-            "streak": 0,
-            "total_claimed": 0
+            "last_claimed": "2026-01-19 14:00:49",
+            "streak": 1,
+            "total_claimed": 1
         },
         "reported_channels": [],
         "inactive": false,
         "left_channels": [],
-        "transactions": [],
+        "transactions": [
+            {
+                "id": "points_daily_8117492678_1768820449374",
+                "action": "daily_gift",
+                "timestamp": "2026-01-19 14:00:49",
+                "updates": {
+                    "points": 1002,
+                    "total_earned": 3
+                }
+            },
+            {
+                "id": "daily_8117492678_1768820449374",
+                "action": "daily_gift_update",
+                "timestamp": "2026-01-19 14:00:49",
+                "updates": {
+                    "daily_gift": {
+                        "last_claimed": "2026-01-19 14:00:49",
+                        "streak": 1,
+                        "total_claimed": 1
+                    }
+                }
+            },
+            {
+                "id": "tx_8117492678_1768826177921",
+                "action": "admin_give_points",
+                "timestamp": "2026-01-19 15:36:17",
+                "updates": {
+                    "points": 2002,
+                    "total_earned": 1003
+                }
+            },
+            {
+                "id": "tx_8117492678_1768826857853",
+                "action": "admin_give_points",
+                "timestamp": "2026-01-19 15:47:37",
+                "updates": {
+                    "points": 3002,
+                    "total_earned": 2003
+                }
+            }
+        ],
         "temp_left_channels": [],
         "permanent_left_channels": [],
         "left_completed_channels": []
     },
     "8575629457": {
-        "points": 0,
+        "points": 3,
         "invites": 0,
         "invited_users": [],
         "bought_channels": {},
@@ -39,22 +79,44 @@
         "first_name": "✨",
         "last_name": "",
         "first_join": "2026-01-18 20:03:45",
-        "total_earned": 0,
+        "total_earned": 3,
         "total_spent": 0,
         "orders": [],
         "reports_made": 0,
         "reports_received": 0,
-        "last_active": "2026-01-18 20:03:45",
+        "last_active": "2026-01-19 15:49:34",
         "active_subscriptions": [],
         "daily_gift": {
-            "last_claimed": null,
-            "streak": 0,
-            "total_claimed": 0
+            "last_claimed": "2026-01-19 15:49:34",
+            "streak": 1,
+            "total_claimed": 1
         },
         "reported_channels": [],
         "inactive": false,
         "left_channels": [],
-        "transactions": [],
+        "transactions": [
+            {
+                "id": "points_daily_8575629457_1768826974755",
+                "action": "daily_gift",
+                "timestamp": "2026-01-19 15:49:34",
+                "updates": {
+                    "points": 3,
+                    "total_earned": 3
+                }
+            },
+            {
+                "id": "daily_8575629457_1768826974755",
+                "action": "daily_gift_update",
+                "timestamp": "2026-01-19 15:49:34",
+                "updates": {
+                    "daily_gift": {
+                        "last_claimed": "2026-01-19 15:49:34",
+                        "streak": 1,
+                        "total_claimed": 1
+                    }
+                }
+            }
+        ],
         "temp_left_channels": [],
         "permanent_left_channels": [],
         "left_completed_channels": []

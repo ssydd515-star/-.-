@@ -10,12 +10,12 @@
     "force_sub_channels": [],
     "stats": {
         "total_users": 2,
-        "total_points": 0,
+        "total_points": 2016,
         "total_invites": 0,
         "total_purchases": 0,
         "total_joins": 0,
         "total_reports": 0,
-        "total_daily_gifts": 0,
+        "total_daily_gifts": 2,
         "total_mutes": 0
     }
 }
