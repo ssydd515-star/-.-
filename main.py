@@ -18,29 +18,26 @@ async def safe_edit(query, text, reply_markup=None):
     except BadRequest:
         pass
 
-
-# إعدادات البوت
-# إعدادات البوت
 # إعدادات البوت
 TOKEN = "8450413524:AAE3Hxcb0tijnwb75kLJzkyhqIzPPBT8XYk"
 ADMIN_ID = 8117492678
 BOT_CHANNEL = "@TUX3T"
-DATA_FILE = "data.json"
-USERS_FILE = "users.json"
+
+# ========== المسارات المحلية في نفس مجلد البرنامج ==========
+# احصل على المسار الحالي للملف
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# ملفات البيانات في نفس المجلد
+DATA_FILE = os.path.join(current_dir, "data.json")
+USERS_FILE = os.path.join(current_dir, "users.json")
+BACKUP_DIR = os.path.join(current_dir, "backups")
+
+# تأكد من وجود مجلد النسخ الاحتياطي
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # نظام التحديثات الدقيقة للباك أب
-BACKUP_INTERVAL = 1800  # كل 60 ثانية (دقيقة واحدة)
+BACKUP_INTERVAL = 1800
 _last_backup_time = 0
-
-# ========== المسارات المحلية على الهاتف ==========
-BOT_DIR = "/storage/emulated/0/بو"
-DATA_FILE = os.path.join(BOT_DIR, "data.json")
-USERS_FILE = os.path.join(BOT_DIR, "users.json")
-BACKUP_DIR = os.path.join(BOT_DIR, "backups")
-
-# تأكد من وجود المجلدات
-os.makedirs(BOT_DIR, exist_ok=True)
-os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # إعدادات متقدمة
 CACHE_TTL = 30
@@ -63,6 +60,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# ... باقي الكود يبقى كما هو بدون تغيير ...
 
 # أنظمة التخزين
 _data_cache = {}
@@ -4543,7 +4542,7 @@ async def storage_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             f"📊 **معلومات التخزين المحلي**\n\n"
             f"📁 **المسارات:**\n"
-            f"• المجلد الرئيسي: `{BOT_DIR}`\n"
+            f"• المجلد الحالي: `{current_dir}`\n"  # ⬅️ تغيير هنا
             f"• مجلد النسخ: `{BACKUP_DIR}`\n\n"
             
             f"📄 **الملفات الرئيسية:**\n"
@@ -4559,7 +4558,6 @@ async def storage_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         
-        # زر لعرض محتويات المجلد
         keyboard = [
             [InlineKeyboardButton("🔄 تحديث المعلومات", callback_data="refresh_storage_info")],
             [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
@@ -5076,75 +5074,7 @@ async def send_backup_files_to_owner(bot):
     except Exception as e:
         logger.error(f"❌ خطأ عام في إرسال الباك أب: {e}")
 
-async def storage_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض معلومات التخزين"""
-    user_id = str(update.message.from_user.id)
-    
-    if not is_admin(int(user_id)):
-        await update.message.reply_text("❌ هذا الأمر للمشرفين فقط!")
-        return
-    
-    try:
-        # معلومات الملفات
-        users_size = os.path.getsize(USERS_FILE) if os.path.exists(USERS_FILE) else 0
-        data_size = os.path.getsize(DATA_FILE) if os.path.exists(DATA_FILE) else 0
-        
-        # عدد النسخ الاحتياطية
-        backup_count = 0
-        backup_total_size = 0
-        if os.path.exists(BACKUP_DIR):
-            for file in os.listdir(BACKUP_DIR):
-                if file.endswith('.bak'):
-                    file_path = os.path.join(BACKUP_DIR, file)
-                    backup_total_size += os.path.getsize(file_path)
-                    backup_count += 1
-        
-        # تحويل الحجم
-        def format_size(bytes_size):
-            for unit in ['B', 'KB', 'MB']:
-                if bytes_size < 1024:
-                    return f"{bytes_size:.2f} {unit}"
-                bytes_size /= 1024
-            return f"{bytes_size:.2f} GB"
-        
-        # تحميل البيانات للإحصائيات
-        users_data = load_users()
-        data_info = load_data()
-        
-        message = (
-            f"📊 **معلومات التخزين المحلي**\n\n"
-            f"📁 **المسارات:**\n"
-            f"• المجلد الرئيسي: `{BOT_DIR}`\n"
-            f"• مجلد النسخ: `{BACKUP_DIR}`\n\n"
-            
-            f"📄 **الملفات الرئيسية:**\n"
-            f"• `users.json`: {format_size(users_size)} ({len(users_data)} مستخدم)\n"
-            f"• `data.json`: {format_size(data_size)}\n"
-            f"• القنوات: {len(data_info.get('channels', {}))}\n\n"
-            
-            f"💾 **النسخ الاحتياطية:**\n"
-            f"• العدد: {backup_count} نسخة\n"
-            f"• الحجم الإجمالي: {format_size(backup_total_size)}\n\n"
-            
-            f"📅 **آخر تحديث:**\n"
-            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-        
-        # زر لعرض محتويات المجلد
-        keyboard = [
-            [InlineKeyboardButton("🔄 تحديث المعلومات", callback_data="refresh_storage_info")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]
-        
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ خطأ في storage_info: {e}")
-        await update.message.reply_text(f"❌ خطأ: {str(e)[:100]}")
+
 # ===================== الدالة الرئيسية =====================
 
 def main():
@@ -5153,10 +5083,10 @@ def main():
     
     try:
         # ========== التحقق من المسارات المحلية ==========
-        logger.info(f"📁 التحقق من المسار: {BOT_DIR}")
+        logger.info(f"📁 المجلد الحالي: {current_dir}")  # ⬅️ تغيير هنا
         
         # إنشاء المجلدات الضرورية على الهاتف
-        required_folders = [BOT_DIR, BACKUP_DIR]
+        required_folders = [BACKUP_DIR]  # ⬅️ تغيير هنا (إزالة BOT_DIR)
         for folder in required_folders:
             if not os.path.exists(folder):
                 try:
@@ -5166,7 +5096,7 @@ def main():
                     logger.error(f"❌ فشل إنشاء مجلد {folder}: {e}")
                     print(f"\n❌ خطأ: لا يمكن إنشاء مجلد {folder}")
                     print("💡 تأكد من:")
-                    print(f"1. صلاحيات الكتابة في: /storage/emulated/0/")
+                    print(f"1. صلاحيات الكتابة في: {current_dir}")  # ⬅️ تغيير هنا
                     print("2. مساحة تخزين كافية")
                     print("3. أن الهاتف غير مقفل")
                     return
@@ -5174,17 +5104,17 @@ def main():
         # 🔧 التحقق من صلاحيات الكتابة
         try:
             # اختبار الكتابة
-            test_file = os.path.join(BOT_DIR, "test_write.txt")
+            test_file = os.path.join(current_dir, "test_write.txt")  # ⬅️ تغيير هنا
             with open(test_file, 'w') as f:
                 f.write("test")
             os.remove(test_file)
             logger.info("✅ صلاحيات الكتابة صالحة")
         except Exception as e:
-            logger.error(f"❌ لا توجد صلاحيات كتابة في {BOT_DIR}: {e}")
-            print(f"\n❌ خطأ: لا يمكن الكتابة في {BOT_DIR}")
+            logger.error(f"❌ لا توجد صلاحيات كتابة في {current_dir}: {e}")  # ⬅️ تغيير هنا
+            print(f"\n❌ خطأ: لا يمكن الكتابة في {current_dir}")  # ⬅️ تغيير هنا
             print("💡 الحلول:")
             print("1. استخدم تطبيق Termux")
-            print("2. استخدم مسار /data/data/com.termux/files/home/")
+            print(f"2. استخدم مسار: {current_dir}")  # ⬅️ تغيير هنا
             print("3. تأكد من إذن التخزين")
             return
         
@@ -5209,19 +5139,26 @@ def main():
                 logger.error(f"❌ فشل إنشاء {USERS_FILE}: {e}")
                 return
         
-        # 🔧 تحميل البيانات للتحقق
+        # 🔧 تحميل البيانات المحلية للتحقق
         try:
             data = load_data()
             users_data = load_users()
             logger.info(f"📊 تم تحميل {len(users_data)} مستخدم و {len(data.get('channels', {}))} قناة")
             
-            # عرض معلومات الملفات
+            # عرض معلومات الملفات المحلية
             users_size = os.path.getsize(USERS_FILE) if os.path.exists(USERS_FILE) else 0
             data_size = os.path.getsize(DATA_FILE) if os.path.exists(DATA_FILE) else 0
-            logger.info(f"💾 حجم الملفات: users.json={users_size:,} bytes, data.json={data_size:,} bytes")
+            logger.info(f"💾 حجم الملفات المحلية: users.json={users_size:,} bytes, data.json={data_size:,} bytes")
+            
+            # عرض قائمة الملفات في المجلد الحالي
+            files_in_dir = os.listdir(current_dir)
+            logger.info(f"📂 الملفات في المجلد الحالي: {len(files_in_dir)} ملف")
+            for file in files_in_dir:
+                if file.endswith(('.json', '.log', '.py')):
+                    logger.info(f"   📄 {file}")
             
         except Exception as e:
-            logger.error(f"⚠️ خطأ في تحميل البيانات، سيتم استخدام البيانات الافتراضية: {e}")
+            logger.error(f"⚠️ خطأ في تحميل البيانات المحلية، سيتم استخدام البيانات الافتراضية: {e}")
             # استخدام البيانات الافتراضية
             data = create_initial_data()
             users_data = {}
@@ -5253,7 +5190,7 @@ def main():
         application.add_handler(CommandHandler("code", handle_code_command))
         application.add_handler(CommandHandler("test_penalty", test_penalty))
         application.add_handler(CommandHandler("storage", storage_info))
-        application.add_handler(CommandHandler("getbackup", get_backup_command))  # ⭐ أمر جديد
+        application.add_handler(CommandHandler("getbackup", get_backup_command))
         
         # أزرار الكيبورد
         application.add_handler(CallbackQueryHandler(button_handler, pattern=".*"))
@@ -5305,7 +5242,7 @@ def main():
             ("تنظيف الكتم المنتهي", cleanup_expired_mutes, 3600, 60),
             ("فحص اكتمال القنوات", auto_completion_check, 120, 60),
             ("تنظيف المعاملات القديمة", cleanup_old_transactions, 3600, 120),
-            ("إرسال النسخ الاحتياطية", send_backup_to_owner, 1800, 60),  # ⭐ مهمة جديدة
+            ("إرسال النسخ الاحتياطية", send_backup_to_owner, 1800, 60),
         ]
         
         successful_tasks = 0
@@ -5323,7 +5260,7 @@ def main():
                 logger.error(f"❌ فشل جدولة {task_name}: {e}")
         
         # المهام الاختيارية (إذا نجحت المهام الأساسية)
-        if successful_tasks >= 2:  # إذا نجحت على الأقل مهمتين أساسيتين
+        if successful_tasks >= 2:
             optional_tasks = [
                 ("تنظيف البيانات", periodic_cleanup, 86400, 600),
                 ("تصحيح بيانات القنوات", fix_channel_data_consistency, 1800, 300),
@@ -5346,11 +5283,20 @@ def main():
         logger.info("🎉 البوت يعمل الآن بنجاح!")
         logger.info(f"👤 مالك البوت: {ADMIN_ID}")
         logger.info(f"📢 قناة البوت: {BOT_CHANNEL}")
-        logger.info(f"📁 المسار الرئيسي: {BOT_DIR}")
-        logger.info(f"💾 ملفات البيانات:")
+        logger.info(f"📁 المجلد الحالي: {current_dir}")
+        logger.info(f"💾 ملفات البيانات المحلية:")
         logger.info(f"   • users.json: {USERS_FILE}")
         logger.info(f"   • data.json: {DATA_FILE}")
         logger.info(f"   • backups: {BACKUP_DIR}")
+        
+        # عرض الملفات المحلية الموجودة
+        local_files = [f for f in os.listdir(current_dir) if f.endswith(('.json', '.py', '.log'))]
+        logger.info(f"📂 الملفات المحلية: {len(local_files)} ملف")
+        for file in sorted(local_files):
+            file_path = os.path.join(current_dir, file)
+            size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            logger.info(f"   📄 {file} ({size:,} bytes)")
+        
         logger.info(f"⏰ المهام المجدولة: {successful_tasks}/{len(scheduled_tasks)}")
         logger.info(f"📤 النسخ الاحتياطي: كل {BACKUP_INTERVAL} ثانية")
         logger.info(f"🕒 وقت البدء: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -5370,7 +5316,7 @@ def main():
             logger.info("⏹️ إيقاف البوت بواسطة المستخدم...")
             print("\n" + "=" * 50)
             print("🛑 تم إيقاف البوت بنجاح!")
-            print(f"📁 البيانات محفوظة في: {BOT_DIR}")
+            print(f"📁 البيانات محفوظة في: {current_dir}")
             print(f"📁 النسخ الاحتياطية: {BACKUP_DIR}")
             print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 50)
@@ -5406,17 +5352,17 @@ def main():
         print("\n" + "=" * 60)
         print("❌ حدث خطأ غير متوقع في تشغيل البوت!")
         print(f"📋 الخطأ: {str(e)[:100]}...")
-        print(f"📁 مسار البيانات: {BOT_DIR}")
+        print(f"📁 المجلد الحالي: {current_dir}")
+        print(f"📁 ملفات البيانات: {USERS_FILE}, {DATA_FILE}")
         print(f"⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 60)
         
         # إعطاء خيار للمستخدم
         print("\n💡 نصائح استكشاف الأخطاء:")
         print("1. تحقق من توكن البوت")
-        print(f"2. تحقق من صلاحيات المجلد: {BOT_DIR}")
-        print("3. جرب تشغيل البوت من تطبيق Termux")
+        print(f"2. تحقق من وجود الملفات في: {current_dir}")
+        print("3. تأكد من صلاحيات الكتابة في المجلد")
         print("4. تأكد من اتصال الإنترنت")
-        print("5. تحقق من مساحة التخزين")
         
         # سؤال المستخدم عما إذا كان يريد إعادة المحاولة
         try:
@@ -5459,13 +5405,13 @@ if __name__ == "__main__":
             print(f"\n⚠️ المحاولة {retry_count}/{max_retries} فشلت: {str(e)[:50]}...")
             
             if retry_count < max_retries:
-                wait_time = retry_count * 5  # زيادة وقت الانتظار مع كل محاولة
+                wait_time = retry_count * 5
                 print(f"⏳ إعادة المحاولة بعد {wait_time} ثانية...")
                 time.sleep(wait_time)
             else:
                 print(f"❌ فشلت جميع المحاولات ({max_retries})")
                 print("🔧 يرجى التحقق من:")
-                print("  1. توكن البوت")
-                print("  2. اتصال الإنترنت")
-                print("  3. صلاحيات الملفات")
-                print("  4. ملفات البيانات (جرب حذف data.json و users.json)")
+                print(f"  1. وجود الملفات في: {current_dir}")
+                print("  2. توكن البوت")
+                print("  3. اتصال الإنترنت")
+                print("  4. صلاحيات الملفات")
